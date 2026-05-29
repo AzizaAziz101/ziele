@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KI & Automation — Claude Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #07070f;
+      --surface:     #0e0e1c;
+      --surface-2:   #14142a;
+      --border:      rgba(255,255,255,0.07);
+      --text:        #e2e2f0;
+      --muted:       #5a5a7a;
+      --accent:      #7c3aed;
+      --accent-2:    #4f46e5;
+      --glow:        rgba(124,58,237,0.14);
+    }
+
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+
+    /* grid + orb */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image:
+        linear-gradient(rgba(124,58,237,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,.025) 1px, transparent 1px);
+      background-size: 44px 44px;
+    }
+    body::after {
+      content: '';
+      position: fixed; top: -240px; right: -240px;
+      width: 640px; height: 640px;
+      background: radial-gradient(circle, rgba(124,58,237,.1) 0%, transparent 68%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .app {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column;
+      height: 100vh; max-width: 860px;
+      margin: 0 auto; padding: 0 20px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 18px 0 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .logo {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px;
+      box-shadow: 0 0 24px var(--glow);
+    }
+    .header-info h1 { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+    .header-info p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .status {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--muted);
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: blink 2.4s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* ── Messages ── */
+    .messages {
+      flex: 1; overflow-y: auto; padding: 28px 0;
+      display: flex; flex-direction: column; gap: 22px;
+      scrollbar-width: thin; scrollbar-color: var(--surface-2) transparent;
+    }
+    .messages::-webkit-scrollbar { width: 3px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 4px; }
+
+    /* ── Welcome ── */
+    .welcome {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; flex: 1; text-align: center;
+      padding: 48px 24px; gap: 16px;
+    }
+    .welcome-icon {
+      width: 68px; height: 68px; border-radius: 20px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px;
+      box-shadow: 0 0 48px var(--glow), 0 0 90px rgba(124,58,237,.07);
+    }
+    .welcome h2 {
+      font-size: 22px; font-weight: 600; letter-spacing: -.02em;
+      background: linear-gradient(135deg, #fff 20%, rgba(255,255,255,.5));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .welcome p { font-size: 13px; color: var(--muted); max-width: 380px; line-height: 1.65; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+    .chip {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 7px 16px;
+      font-size: 12px; color: var(--muted); cursor: pointer;
+      transition: border-color .2s, color .2s, background .2s;
+    }
+    .chip:hover { border-color: rgba(124,58,237,.45); color: var(--text); background: var(--surface-2); }
+
+    /* ── Bubbles ── */
+    .message { display: flex; gap: 11px; animation: appear .25s ease; }
+    .message.user { flex-direction: row-reverse; }
+    @keyframes appear { from{opacity:0;transform:translateY(7px)} to{opacity:1;transform:translateY(0)} }
+
+    .avatar {
+      width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 14px;
+    }
+    .avatar.ai  { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+    .avatar.usr { background: var(--surface-2); border: 1px solid var(--border); }
+
+    .bubble {
+      max-width: 74%; padding: 12px 16px; border-radius: 16px;
+      font-size: 14px; line-height: 1.75;
+    }
+    .message.ai   .bubble { background: var(--surface); border: 1px solid var(--border); border-top-left-radius: 4px; }
+    .message.user .bubble { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-top-right-radius: 4px; }
+
+    .bubble pre { background: rgba(0,0,0,.35); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 8px 0; overflow-x: auto; }
+    .bubble pre code { font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 12px; line-height: 1.6; }
+    .bubble code { font-family: 'JetBrains Mono','Fira Code',monospace; font-size: 12px; background: rgba(124,58,237,.15); padding: 1px 5px; border-radius: 4px; }
+    .bubble pre code { background: none; padding: 0; }
+    .bubble strong { color: #c4b5fd; font-weight: 600; }
+    .message.user .bubble strong { color: rgba(255,255,255,.9); }
+
+    /* ── Typing ── */
+    .typing {
+      display: flex; align-items: center; gap: 5px;
+      padding: 13px 16px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; border-top-left-radius: 4px; width: fit-content;
+    }
+    .typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite; }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+    /* ── Input ── */
+    .input-area { padding: 14px 0 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .input-row {
+      display: flex; gap: 8px; align-items: flex-end;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 10px 12px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .input-row:focus-within { border-color: rgba(124,58,237,.5); box-shadow: 0 0 0 3px var(--glow); }
+
+    textarea {
+      flex: 1; background: none; border: none; outline: none;
+      color: var(--text); font-family: 'Inter',sans-serif;
+      font-size: 14px; resize: none; min-height: 24px; max-height: 140px; line-height: 1.55;
+    }
+    textarea::placeholder { color: var(--muted); }
+
+    .send-btn {
+      width: 34px; height: 34px; border-radius: 10px; border: none; cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: opacity .2s, transform .1s;
+    }
+    .send-btn:hover { opacity: .88; }
+    .send-btn:active { transform: scale(.93); }
+    .send-btn:disabled { opacity: .35; cursor: not-allowed; }
+    .send-btn svg { fill: #fff; }
+
+    .hint { text-align: center; margin-top: 8px; font-size: 11px; color: var(--muted); }
+
+    @media (max-width: 580px) {
+      .bubble { max-width: 86%; }
+      .chips { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">⚡</div>
+    <div class="header-info">
+      <h1>KI &amp; Automation</h1>
+      <p>Powered by Claude AI</p>
+    </div>
+    <div class="status"><div class="dot"></div><span>Online</span></div>
+  </header>
+
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">⚡</div>
+      <h2>Dein KI &amp; Automation Assistent</h2>
+      <p>Frag mich zu KI-Integration, Workflow-Automatisierung, n8n, Agenten oder wie du dein Business mit KI skalierst.</p>
+      <div class="chips">
+        <div class="chip" onclick="useSuggestion(this)">Wie automatisiere ich meinen Lead-Prozess?</div>
+        <div class="chip" onclick="useSuggestion(this)">Erkläre mir n8n Workflows</div>
+        <div class="chip" onclick="useSuggestion(this)">Welche KI-Tools sparen mir 10h/Woche?</div>
+        <div class="chip" onclick="useSuggestion(this)">Claude API in mein Projekt integrieren</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="input" placeholder="Frage stellen…" rows="1"
+        onkeydown="handleKey(event)" oninput="grow(this)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="send()">
+        <svg width="15" height="15" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+    <p class="hint">Enter senden · Shift+Enter Zeilenumbruch</p>
+  </div>
+
+</div>
+<script>
+const SYSTEM = `Du bist ein hochspezialisierter KI- und Automatisierungs-Experte. Du hilfst Unternehmern, Entwicklern und Innovatoren dabei, Prozesse zu automatisieren, KI-Tools einzusetzen und mit intelligenten Workflows Zeit und Kosten zu sparen.
+
+Deine Kernthemen:
+- KI-Integration (Claude API, OpenAI, lokale Modelle)
+- No-Code/Low-Code Automatisierung (n8n, Make, Zapier)
+- Python-Automatisierung und Scripting
+- KI-Agenten und Multi-Agent-Systeme
+- Prompt Engineering und System-Design
+- Business-Prozessoptimierung durch KI
+- API-Integration und Webhook-Workflows
+
+Antworte immer: präzise, praxisorientiert, auf Deutsch. Gib konkrete Beispiele und Code wenn sinnvoll. Halte Antworten klar strukturiert.`;
+
+let history = [];
+let busy = false;
+
+const msgEl   = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const btnEl   = document.getElementById('sendBtn');
+
+function grow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+function useSuggestion(el) {
+  inputEl.value = el.textContent;
+  send();
+}
+function scrollBottom() { msgEl.scrollTop = msgEl.scrollHeight; }
+
+function esc(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmt(text) {
+  // fenced code blocks
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g,
+    (_, lang, code) => `<pre><code class="lang-${lang}">${esc(code.trim())}</code></pre>`);
+  // inline code
+  text = text.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  // bold
+  text = text.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  // newlines outside blocks
+  text = text.replace(/\n/g, '<br>');
+  return text;
+}
+
+function addBubble(role, html) {
+  document.getElementById('welcome')?.remove();
+  const wrap = document.createElement('div');
+  wrap.className = `message ${role}`;
+
+  const av = document.createElement('div');
+  av.className = `avatar ${role === 'ai' ? 'ai' : 'usr'}`;
+  av.textContent = role === 'ai' ? '⚡' : '👤';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = html;
+
+  wrap.appendChild(av);
+  wrap.appendChild(bubble);
+  msgEl.appendChild(wrap);
+  scrollBottom();
+  return bubble;
+}
+
+function showTyping() {
+  document.getElementById('welcome')?.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'message ai';
+  wrap.id = 'typing';
+
+  const av = document.createElement('div');
+  av.className = 'avatar ai';
+  av.textContent = '⚡';
+
+  const t = document.createElement('div');
+  t.className = 'typing';
+  t.innerHTML = '<span></span><span></span><span></span>';
+
+  wrap.appendChild(av); wrap.appendChild(t);
+  msgEl.appendChild(wrap);
+  scrollBottom();
+}
+function hideTyping() { document.getElementById('typing')?.remove(); }
+
+async function send() {
+  if (busy) return;
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  btnEl.disabled = true;
+  busy = true;
+
+  addBubble('user', fmt(text));
+  history.push({ role: 'user', content: text });
+  showTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history, system: SYSTEM })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`API Fehler ${res.status}: ${err}`);
+    }
+
+    hideTyping();
+    const bubble = addBubble('ai', '');
+    let full = '';
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = dec.decode(value).split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') continue;
+        try {
+          const obj = JSON.parse(raw);
+          if (obj.type === 'content_block_delta' && obj.delta?.type === 'text_delta') {
+            full += obj.delta.text;
+            bubble.innerHTML = fmt(full);
+            scrollBottom();
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (full) history.push({ role: 'assistant', content: full });
+
+  } catch (err) {
+    hideTyping();
+    addBubble('ai', `<strong>Fehler:</strong> ${esc(err.message)}<br><br>Stelle sicher, dass <code>ANTHROPIC_API_KEY</code> in den Vercel Umgebungsvariablen gesetzt ist.`);
+  }
+
+  busy = false;
+  btnEl.disabled = false;
+  inputEl.focus();
+}
+</script>
+</body>
+</html>
