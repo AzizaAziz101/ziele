@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ziel-Coach — KI</title>
+  <meta name="robots" content="noindex, nofollow">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -295,9 +296,75 @@
       .agent-sub { display: none; }
       .chat-goal-label { display: none; }
     }
+
+    /* ══ AUTH SCREEN ═══════════════════════════ */
+    #viewAuth {
+      height: 100%; height: 100dvh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .auth-box {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 20px; width: 100%; max-width: 320px; padding: 0 24px;
+    }
+    .auth-logo {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--text);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: var(--bg);
+      margin-bottom: 4px;
+    }
+    .auth-title { font-size: 15px; font-weight: 600; letter-spacing: -.02em; }
+    .auth-sub   { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.5; }
+    .auth-input {
+      width: 100%; padding: 12px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 20px;
+      font-weight: 600; letter-spacing: .3em; text-align: center;
+      outline: none; transition: border-color .2s;
+    }
+    .auth-input:focus { border-color: var(--border-h); }
+    .auth-input::placeholder { letter-spacing: .05em; font-size: 14px; font-weight: 400; color: var(--muted-2); }
+    .auth-btn {
+      width: 100%; padding: 12px;
+      background: var(--text); color: var(--bg); border: none;
+      border-radius: 8px; font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .auth-btn:hover { opacity: .88; }
+    .auth-btn:active { transform: scale(.98); }
+    .auth-error {
+      font-size: 12px; color: #f87171; text-align: center;
+      min-height: 16px; transition: opacity .2s;
+    }
   </style>
 </head>
 <body>
+
+<!-- ══════════════════════════════════════
+     VIEW 0 — AUTH
+══════════════════════════════════════ -->
+<div id="viewAuth">
+  <div class="auth-box">
+    <div class="auth-logo">KI</div>
+    <div class="auth-title">Ziel-Coach</div>
+    <div class="auth-sub">Bitte gib den Zugangscode ein.</div>
+    <input
+      id="authInput"
+      class="auth-input"
+      type="password"
+      inputmode="numeric"
+      maxlength="10"
+      placeholder="Code"
+      onkeydown="handleAuthKey(event)"
+      autocomplete="off"
+    >
+    <div class="auth-error" id="authError"></div>
+    <button class="auth-btn" onclick="submitAuth()">Zugang →</button>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════
      VIEW 1 — ONBOARDING
@@ -458,7 +525,7 @@ function fmt(text) {
 function grow(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
 function scroll(id) { const el = g(id); if (el) el.scrollTop = el.scrollHeight; }
 function showView(id) {
-  ['viewOnboarding','viewDiscussion','viewChat'].forEach(v =>
+  ['viewAuth','viewOnboarding','viewDiscussion','viewChat'].forEach(v =>
     g(v).classList.toggle('hidden', v !== id));
 }
 
@@ -1061,6 +1128,40 @@ function appendError(containerId, msg) {
 }
 
 /* ════════════════════════════════════════
+   AUTH
+════════════════════════════════════════ */
+const AUTH_CODE = '1231';
+
+function handleAuthKey(e) {
+  if (e.key === 'Enter') submitAuth();
+}
+
+function submitAuth() {
+  const val = g('authInput').value.trim();
+  if (val === AUTH_CODE) {
+    try { sessionStorage.setItem('auth', '1'); } catch(_) {}
+    g('authError').textContent = '';
+    afterAuth();
+  } else {
+    g('authError').textContent = 'Falscher Code.';
+    g('authInput').value = '';
+    g('authInput').focus();
+  }
+}
+
+function afterAuth() {
+  const session = loadSession();
+  if (session && session.chatHistory && session.chatHistory.length > 0) {
+    const d = new Date(session.savedAt);
+    const label = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) +
+      ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    g('restoreText').textContent = `Letzte Sitzung: ${label} — Ziel: "${(session.profile?.goal || '').slice(0, 40)}"`;
+    g('restoreBanner').classList.remove('hidden');
+  }
+  startOnboarding();
+}
+
+/* ════════════════════════════════════════
    RESET
 ════════════════════════════════════════ */
 function fullReset() {
@@ -1081,16 +1182,17 @@ function fullReset() {
    INIT
 ════════════════════════════════════════ */
 (function init() {
-  const session = loadSession();
-  if (session && session.chatHistory && session.chatHistory.length > 0) {
-    // Session with chat history exists — offer restore
-    const d = new Date(session.savedAt);
-    const label = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) +
-      ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-    g('restoreText').textContent = `Letzte Sitzung: ${label} — Ziel: "${(session.profile?.goal || '').slice(0, 40)}"`;
-    g('restoreBanner').classList.remove('hidden');
+  ['viewOnboarding','viewDiscussion','viewChat'].forEach(v => g(v).classList.add('hidden'));
+
+  let authed = false;
+  try { authed = sessionStorage.getItem('auth') === '1'; } catch(_) {}
+
+  if (authed) {
+    afterAuth();
+  } else {
+    showView('viewAuth');
+    setTimeout(() => g('authInput').focus(), 100);
   }
-  startOnboarding();
 })();
 </script>
 </body>
