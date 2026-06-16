@@ -592,7 +592,7 @@ async function launchDiscussion() {
       g('roundBadge').textContent = `Runde ${ri + 1} / ${ROUNDS.length}`;
       appendDiscSep(ri + 1, ROUNDS[ri].label, ri === ROUNDS.length - 1);
       for (const agent of AGENTS) {
-        await runDiscAgent(agent, buildDiscPrompt(ROUNDS[ri].prompt), ri === ROUNDS.length - 1);
+        await runDiscAgent(agent, buildDiscPrompt(ROUNDS[ri].prompt), ri === ROUNDS.length - 1, ri);
       }
     }
     appendDoneNote('discMessages');
@@ -621,31 +621,78 @@ function buildDiscPrompt(roundPrompt) {
   return `${profileCtx}\n\nDiskussion bisher:\n\n${hist}\n\n---\n\nAufgabe: ${roundPrompt}`;
 }
 
-async function runDiscAgent(agent, userContent, isSynth) {
+async function runDiscAgent(agent, userContent, isSynth, roundIdx) {
   const typingEl = appendTypingDisc(agent);
   const res = await fetchChat(userContent, agent.system, isSynth ? 700 : 450);
   typingEl.remove();
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   const bubble = appendDiscBubble(agent, isSynth);
   const full = await streamInto(res, bubble, 'discMessages');
-  if (full) discHistory.push({ type: 'agent', agentId: agent.id, agentName: agent.name, content: full });
+  if (full) discHistory.push({
+    type: 'agent', agentId: agent.id, agentName: agent.name,
+    content: full, round: roundIdx,
+    roundLabel: ROUNDS[roundIdx]?.label || '', isSynth
+  });
 }
 
 /* ════════════════════════════════════════
    CHAT (single-agent coach)
 ════════════════════════════════════════ */
+/* Render the full agent discussion into any messages container */
+function renderDiscInChat(containerId) {
+  let lastRound = -1;
+  discHistory.forEach(item => {
+    if (item.type !== 'agent') return;
+    const ri = item.round ?? 0;
+    if (ri !== lastRound) {
+      const div = document.createElement('div');
+      div.className = `round-sep${item.isSynth ? ' synth-sep' : ''}`;
+      const lbl = item.isSynth ? 'Synthese' : `Runde ${ri + 1} — ${item.roundLabel}`;
+      div.innerHTML = `<div class="sep-line"></div><span class="sep-label">${lbl}</span><div class="sep-line"></div>`;
+      g(containerId).appendChild(div);
+      lastRound = ri;
+    }
+    const agent = AGENTS.find(a => a.id === item.agentId);
+    if (!agent) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'agent-wrap';
+    wrap.innerHTML = `
+      <div class="agent-header">
+        <div class="agent-bdg" style="background:${agent.color}">${agent.badge}</div>
+        <span class="agent-nm" style="color:${agent.color}">${agent.name}</span>
+        <span class="agent-sub">${agent.sub}</span>
+      </div>`;
+    const bubble = document.createElement('div');
+    bubble.className = `agent-bubble${item.isSynth ? ' synth-bubble' : ''}`;
+    bubble.style.setProperty('--ac', agent.color);
+    bubble.innerHTML = fmt(item.content);
+    wrap.appendChild(bubble);
+    g(containerId).appendChild(wrap);
+  });
+  // Separator between analysis and chat
+  if (discHistory.some(m => m.type === 'agent')) {
+    const sep = document.createElement('div');
+    sep.className = 'round-sep';
+    sep.style.margin = '26px 0 22px';
+    sep.innerHTML = `<div class="sep-line"></div><span class="sep-label" style="color:var(--text);font-weight:600">Chat</span><div class="sep-line"></div>`;
+    g(containerId).appendChild(sep);
+  }
+}
+
 function openChat(fromRestore) {
   showView('viewChat');
   const goalTrunc = profile.goal.length > 60 ? profile.goal.slice(0, 57) + '…' : profile.goal;
   g('chatGoalLabel').textContent = goalTrunc;
+  g('chatMessages').innerHTML = '';
+
+  // Always render the discussion history at the top
+  renderDiscInChat('chatMessages');
 
   if (!fromRestore) {
-    // Clear and show welcome
     chatHistory = [];
     chatCount = 0;
     scriptGenerated = false;
     analysisTriggered = false;
-    g('chatMessages').innerHTML = '';
     g('scriptBtn').classList.add('hidden');
     g('analysisBtn').classList.add('hidden');
 
@@ -654,8 +701,6 @@ function openChat(fromRestore) {
     chatHistory.push({ role: 'assistant', content: welcome });
     saveSession();
   } else {
-    // Restore messages from chatHistory
-    g('chatMessages').innerHTML = '';
     restoreChatMessages();
     g('scriptBtn').classList.toggle('hidden', !scriptGenerated && chatCount < 2);
     g('analysisBtn').classList.toggle('hidden', !analysisTriggered && chatCount < 6);
